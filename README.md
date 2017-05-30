@@ -1,2 +1,16 @@
 # gym-nerfbot
-OpenAI environment for training the Nerfbot
+
+Tested to work with basic_rl
+
+## Installation
+
+```
+cd gym-nerfbot
+pip install -e .
+```
+
+## Agent File Includes
+
+```
+import gym_nerfbot
+```
