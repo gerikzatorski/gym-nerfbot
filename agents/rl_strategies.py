@@ -42,7 +42,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Various RL algorithms for use with OpenAI.')
     parser.add_argument('-p', '--policy', default='random', choices=['random','epsilon_greedy'], help='Policy / Strategy to use. (Default: random)')
-    parser.add_argument('-e', '--environment', default='CartPole-v0', help='Name of the OpenAI Gym environment. (Default: CartPole-v0')
+    parser.add_argument('-e', '--environment', default='OneStaticCircleTarget-v0', help='Name of the OpenAI Gym environment. (Default: OneStaticCircleTarget-v0')
     parser.add_argument('-n', '--nepisode', default='5', type=int, help="Number of episode. (Default: 5000)")
     parser.add_argument('-v', '--video', default='True', type=bool, help="Option to record video with OpenAI. (Default: 100)")
 
@@ -69,7 +69,6 @@ if __name__ == '__main__':
 
     # RL loop variables
     max_episodes = args.nepisode
-
     record_video = args.video
     reward = 0
     done = False
@@ -89,7 +88,7 @@ if __name__ == '__main__':
             if done:
                 break
             # record video?
-            if (record_video): env.render('observation_pixels')
+            if (record_video): env.render('human')
             
     # Close the env and write monitor result info to disk
     env.close()
@@ -97,4 +96,4 @@ if __name__ == '__main__':
     # Upload to the scoreboard
     # gym.upload(outdir)
 
-    logger.info("Successfully ran RandomAgent. Now trying to upload results to the scoreboard. If it breaks, you can always just try re-uploading the same results.")
+    logger.info("Successfully ran Simulation. Now trying to upload results to the scoreboard. If it breaks, you can always just try re-uploading the same results.")

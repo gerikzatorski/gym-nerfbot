@@ -11,13 +11,6 @@ import gym_nerfbot
 import numpy as np
 import math
 
-# for rendering
-from gym.envs.classic_control import rendering
-import Box2D
-from Box2D.b2 import (edgeShape, circleShape, fixtureDef, polygonShape, revoluteJointDef, contactListener, shape)
-import pyglet
-from pyglet import gl
-
 OBSERVATION_W = 500
 OBSERVATION_H = 500
 WINDOW_W = 500
@@ -37,16 +30,13 @@ class NerfbotEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array', 'observation_pixels']}
 
     def __init__(self, obs_type='OneDimCoord', distance=10):
-        # todo: do I need to seed here ...
-        # self._seed()
-
         self.viewer = None
         self._obs_type = obs_type
-        self.distance = distance                          # characterize distance from Nerfbot to the simulated wall
-        self.motor_limits = (28, 28)                      # limit stepper motor ranges for safety
-        self.home = (self.motor_limits[0]/2 ,             # calibrate for center of observation space
+        self.distance = distance               # characterize distance from Nerfbot to the simulated wall
+        self.motor_limits = (28, 28)           # limit stepper motor ranges for safety
+        self.home = (self.motor_limits[0]/2 ,  # calibrate for center of observation space
                      self.motor_limits[1]/2)
-        self.state = self.home                            # set state to calibrated position
+        self.state = self.home                 # set state to calibrated position
 
         # assumption: camera border is equivalent to motor aim at limits
         self.step_angle = math.radians(1.8) # 1.8 deg per step
@@ -63,10 +53,9 @@ class NerfbotEnv(gym.Env):
 
     def _reset(self):
         """ OpenAI gym API: reset
-        Returns: initial observation
+        Returns: initial observation (determined by subclass)
         """
         self.human_render = False
-        # subclasses determine returned observation
 
     def _step(self, action):
         """ OpenAI gym API: step
@@ -75,87 +64,39 @@ class NerfbotEnv(gym.Env):
         raise NotImplementedError
 
     def _render(self, mode='human', close=False):
-        """ OpenAI gym API: reset
+        """ OpenAI gym API: render
         Based off OpenAI CarRacing-v0
         """
         if close:
             if self.viewer is not None:
                 self.viewer.close()
                 self.viewer = None
-                return
+            return
+
+        from gym.envs.classic_control import rendering
 
         if self.viewer is None:
-            from gym.envs.classic_control import rendering
             self.viewer = rendering.Viewer(WINDOW_W, WINDOW_H)
-            self.transform = rendering.Transform()
 
-        # draw subclass information (ex. the circle target)
-        self.draw_image()
+        # target object (todo: generalize to all subclasses, not just OneStaticCircleTarget)
+        tar = rendering.make_circle(radius=self.target.radius, res=30, filled=True)
+        tar.set_color(0.8, 0.0, 0.0)
+        tar.add_attr(rendering.Transform(translation=self.target.image_coord))
+        self.viewer.add_geom(tar)
 
-        arr = None
-        win = self.viewer.window
-        if mode != 'observation_pixels':
-            self.draw_aim() # todo: move this to a better spot
-            win.switch_to()
-            win.dispatch_events()
-        if mode=="rgb_array" or mode=="observation_pixels":
-            win.clear()
-            t = self.transform
-            if mode=='rgb_array':
-                VP_W = VIDEO_W
-                VP_H = VIDEO_H
-            else:
-                VP_W = VIDEO_W
-                VP_H = VIDEO_H
-            gl.glViewport(0, 0, VP_W, VP_H)
-            t.enable()
-            # todo: self._render_noise()
-            for geom in self.viewer.onetime_geoms:
-                geom.render()
-            t.disable()
-            image_data = pyglet.image.get_buffer_manager().get_color_buffer().get_image_data()
-            arr = np.fromstring(image_data.data, dtype=np.uint8, sep='')
-            arr = arr.reshape(VP_H, VP_W, 4)
-            arr = arr[::-1, :, 0:3]
-
-        if mode=="rgb_array" and not self.human_render: # agent can call or not call env.render() itself when recording video.
-            win.flip()
-
-        if mode=='human':
-            self.draw_aim() # todo: move this to a better spot
-            self.human_render = True
-            win.clear()
-            t = self.transform
-            gl.glViewport(0, 0, VIDEO_W, VIDEO_H)
-            t.enable()
-            # todo: self._render_noise()
-            for geom in self.viewer.onetime_geoms:
-                geom.render()
-            t.disable()
-            win.flip()
-
-        return arr
+        crosshairs = rendering.make_circle(radius=self.target.radius/4, res=30, filled=True)
+        crosshairs.set_color(0.0, 0.8, 0.0)
+        x = self.state[0] * VIDEO_W / self.motor_limits[0]
+        y = self.state[1] * VIDEO_W / self.motor_limits[1]
+        crosshairs.add_attr(rendering.Transform(translation=(x,y)))
+        self.viewer.add_geom(crosshairs)
+            
+        # todo: add history of "shots"
+        return self.viewer.render(return_rgb_array = mode=='rgb_array')
 
     def _render_noise(self):
         """ TODO """
         raise NotImplementedError
-
-    def draw_aim(self):
-        t = rendering.Transform(translation=(self.state[0]*VIDEO_W/self.motor_limits[0], self.state[1]*VIDEO_H/self.motor_limits[1]))
-        self.viewer.draw_circle(radius=8, res=30, filled=True, color=(0.0,0.8,0.0)).add_attr(t)
-
-    # def _render(self, mode='human', close=False):
-    #     """ Viewer only supports human mode """
-    #     if close:
-    #         if self.viewer is not None:
-    #             os.kill(self.viewer.pid, signal.SIGKILL)
-    #     else:
-    #         if self.viewer is None:
-    #             self._start_viewer()
-
-    # def _destroy(self):
-    #     if self.target:
-    #         self.target.destroy()
 
 ###############################################################################
 #                             Nerfbot Environments                            #
@@ -164,9 +105,6 @@ class NerfbotEnv(gym.Env):
 class OneStaticCircleTarget(NerfbotEnv):
     """ OpenAI environment with one target
     Because the target is static, no update is need through observation
-
-    TODO:
-        * implement more shapes
     """
     def __init__(self, random=True, shape='Circle'):
         super(OneStaticCircleTarget, self).__init__()
@@ -179,7 +117,6 @@ class OneStaticCircleTarget(NerfbotEnv):
         self.target = CircleTarget()
 
     def _step(self, action):
-
         assert self.action_space.contains(action)
         done = False
 
@@ -210,9 +147,6 @@ class OneStaticCircleTarget(NerfbotEnv):
         if self._obs_type == 'OneDimCoord':
             return TwoToOneDim(self.target.image_coord, IMAGE_DIM)
 
-    def draw_image(self):
-        self.target.draw(self.viewer)
-
 ###############################################################################
 #                                   Helpers                                   #
 ###############################################################################
@@ -231,10 +165,6 @@ class CircleTarget(object):
 
     # def rand_size(self):
     #     self.radius = np.random.randint(MAX_TARGET_RADIUS)
-
-    def draw(self, viewer):
-        t = rendering.Transform(translation=self.image_coord)
-        viewer.draw_circle(radius=self.radius, res=30, filled=True, color=(0.8,0.0,0.0)).add_attr(t)
 
     def virtual_target_position(self, env):
         x = self.image_coord[0] * (env.virtual_width / VIDEO_W)
