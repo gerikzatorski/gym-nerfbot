@@ -89,14 +89,9 @@ class NerfbotEnv(gym.Env):
         x = self.state[0] * VIDEO_W / self.motor_limits[0]
         y = self.state[1] * VIDEO_W / self.motor_limits[1]
         crosshairs.add_attr(rendering.Transform(translation=(x,y)))
-        self.viewer.add_geom(crosshairs)
+        self.viewer.add_onetime(crosshairs)
             
-        # todo: add history of "shots"
         return self.viewer.render(return_rgb_array = mode=='rgb_array')
-
-    def _render_noise(self):
-        """ TODO """
-        raise NotImplementedError
 
 ###############################################################################
 #                             Nerfbot Environments                            #
@@ -104,6 +99,7 @@ class NerfbotEnv(gym.Env):
 
 class OneStaticCircleTarget(NerfbotEnv):
     """ OpenAI environment with one target
+    Target never moves, not even between episodes (see reset)
     Because the target is static, no update is need through observation
     """
     def __init__(self, random=True, shape='Circle'):
@@ -113,7 +109,6 @@ class OneStaticCircleTarget(NerfbotEnv):
         self.action_space = spaces.Discrete(self.motor_limits[0] * self.motor_limits[1])
         if self._obs_type =='OneDimCoord':
             self.observation_space = spaces.Discrete(OBSERVATION_W * OBSERVATION_H)
-        
         self.target = CircleTarget()
 
     def _step(self, action):
@@ -132,11 +127,13 @@ class OneStaticCircleTarget(NerfbotEnv):
         distance = math.sqrt(dx**2 + dy**2)
         reward = -distance
 
-        done = bool(distance < 2)
+        done = bool(distance < 1)
         if done: 
             reward = 100
 
-        return TwoToOneDim(self.target.image_coord, IMAGE_DIM), reward, done, {}
+        info = {'distance': distance}
+        
+        return TwoToOneDim(self.target.image_coord, IMAGE_DIM), reward, done, info
 
     def _reset(self):
         """ 
@@ -160,11 +157,11 @@ class CircleTarget(object):
         self.image_coord = None
         self.radius = None
 
-    # def rand_pos(self):
-    #     self.image_coord = (np.random.randint(VIDEO_W), np.random.randint(VIDEO_H)) # random target pos within bounds
+    def rand_pos(self):
+        self.image_coord = (np.random.randint(VIDEO_W), np.random.randint(VIDEO_H)) # random target pos within bounds
 
-    # def rand_size(self):
-    #     self.radius = np.random.randint(MAX_TARGET_RADIUS)
+    def rand_size(self):
+        self.radius = np.random.randint(MAX_TARGET_RADIUS)
 
     def virtual_target_position(self, env):
         x = self.image_coord[0] * (env.virtual_width / VIDEO_W)
