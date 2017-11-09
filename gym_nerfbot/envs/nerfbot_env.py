@@ -38,10 +38,21 @@ class NerfbotEnv(gym.Env):
                      self.motor_limits[1]/2)
         self.state = self.home                 # set state to calibrated position
 
+        self.img = 255*np.random.rand(VIDEO_W, VIDEO_H) # noisy image
+        
         # assumption: camera border is equivalent to motor aim at limits
         self.step_angle = math.radians(1.8) # 1.8 deg per step
         self.virtual_width = self.distance * math.tan(self.step_angle * self.motor_limits[0])
         self.virtual_height = self.distance * math.tan(self.step_angle * self.motor_limits[0])
+
+        # define observation and action spaces
+        self.action_space = spaces.Discrete(self.motor_limits[0] * self.motor_limits[1])
+        if self._obs_type =='OneDimCoord':
+            self.observation_space = spaces.Discrete(OBSERVATION_W * OBSERVATION_H)
+        elif self._obs_type =='image':
+            self.observation_space = spaces.Box(low=0, high=255, shape=(OBSERVATION_W, OBSERVATION_H, 3))
+        else:
+            raise error.Error('Unrecognized observation type: {}'.format(self._obs_type))
 
     def _virtual_motor_pos(self):
         """ Simlate a shot's position based on Nerfbot's pan and tilt steps to a position on a virtual wall (meters?)
@@ -74,7 +85,6 @@ class NerfbotEnv(gym.Env):
             return
 
         from gym.envs.classic_control import rendering
-
         if self.viewer is None:
             self.viewer = rendering.Viewer(WINDOW_W, WINDOW_H)
 
@@ -102,22 +112,17 @@ class OneStaticCircleTarget(NerfbotEnv):
     Target never moves, not even between episodes (see reset)
     Because the target is static, no update is need through observation
     """
-    def __init__(self, random=True, shape='Circle'):
+    def __init__(self, shape='Circle'):
         super(OneStaticCircleTarget, self).__init__()
-
-        # spaces are a 1 dimensions representation of pan*tilt and image width*height
-        self.action_space = spaces.Discrete(self.motor_limits[0] * self.motor_limits[1])
-        if self._obs_type =='OneDimCoord':
-            self.observation_space = spaces.Discrete(OBSERVATION_W * OBSERVATION_H)
         self.target = CircleTarget()
 
     def _step(self, action):
         assert self.action_space.contains(action)
         done = False
+        reward = 0.0
 
         self.state = OneToTwoDim(action, self.motor_limits)
 
-        reward = 0
         aim_horiz, aim_vert = self._virtual_motor_pos()
 
         target_horiz, target_vert = self.target.virtual_target_position(self)
@@ -131,19 +136,27 @@ class OneStaticCircleTarget(NerfbotEnv):
         if done: 
             reward = 100
 
+        obs = self._get_obs()
         info = {'distance': distance}
-        
-        return TwoToOneDim(self.target.image_coord, IMAGE_DIM), reward, done, info
+        return obs, reward, done, info
 
     def _reset(self):
-        """ 
-        Depending on _obs_type, returns initial observation:
-            ('OneDimCoord') - a 1D representation of the target center
         """
+        Returns:
+            The first observation (dependent on obs_type)
+        """        
         super(OneStaticCircleTarget, self)._reset()
+        return self._get_obs()
+
+    def _get_obs(self):
         if self._obs_type == 'OneDimCoord':
             return TwoToOneDim(self.target.image_coord, IMAGE_DIM)
+        elif self._obs_type == 'image':
+            img = self._get_image()
+        return img
 
+    def _get_image(self):
+        return self.img
 ###############################################################################
 #                                   Helpers                                   #
 ###############################################################################
