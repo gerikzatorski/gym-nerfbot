@@ -98,10 +98,10 @@ class NerfbotEnv(gym.Env):
             dpi = 80
             figsize = OBSERVATION_W / float(dpi), OBSERVATION_H / float(dpi)
             self.fig = plt.figure(figsize=figsize)
-            self.fig.set_tight_layout({"pad": .0})
+            # self.fig.set_tight_layout({"pad": .0})
             
         print "STEP"
-            
+
         ax = plt.Axes(self.fig, [0., 0., 1., 1.])
         ax.xaxis.set_major_locator(ticker.NullLocator())
         ax.yaxis.set_major_locator(ticker.NullLocator())
@@ -142,7 +142,7 @@ class NerfbotEnv(gym.Env):
 
         
         if mode == 'human':
-            plt.show(block=False, bbox_inches='tight')
+            plt.show(block=False)
         if mode == 'rgb_array':
             return np.array(data)
         else:
@@ -206,6 +206,7 @@ class OneStaticCircleTarget(NerfbotEnv):
 
     def _get_image(self):
         return self.img
+
 ###############################################################################
 #                                   Helpers                                   #
 ###############################################################################
