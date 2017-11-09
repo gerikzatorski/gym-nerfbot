@@ -11,6 +11,12 @@ import gym_nerfbot
 import numpy as np
 import math
 
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import matplotlib.ticker as ticker
+# import matplotlib as mpl
+# mpl.rcParams['toolbar'] = 'None'
+
 OBSERVATION_W = 500
 OBSERVATION_H = 500
 WINDOW_W = 500
@@ -30,7 +36,7 @@ class NerfbotEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array', 'observation_pixels']}
 
     def __init__(self, obs_type='OneDimCoord', distance=10):
-        self.viewer = None
+        self.fig = None
         self._obs_type = obs_type
         self.distance = distance               # characterize distance from Nerfbot to the simulated wall
         self.motor_limits = (28, 28)           # limit stepper motor ranges for safety
@@ -38,7 +44,11 @@ class NerfbotEnv(gym.Env):
                      self.motor_limits[1]/2)
         self.state = self.home                 # set state to calibrated position
 
-        self.img = 255*np.random.rand(VIDEO_W, VIDEO_H) # noisy image
+        # create noisy background for sim
+        if self._obs_type =='OneDimCoord':
+            self.img = np.zeros((OBSERVATION_H, OBSERVATION_W))
+        if self._obs_type =='image':
+            self.img = np.random.random((OBSERVATION_H, OBSERVATION_W))
         
         # assumption: camera border is equivalent to motor aim at limits
         self.step_angle = math.radians(1.8) # 1.8 deg per step
@@ -79,29 +89,68 @@ class NerfbotEnv(gym.Env):
         Based off OpenAI CarRacing-v0
         """
         if close:
-            if self.viewer is not None:
-                self.viewer.close()
-                self.viewer = None
+            if self.fig is not None:
+                plt.close()
+                self.fig = None
             return
 
-        from gym.envs.classic_control import rendering
-        if self.viewer is None:
-            self.viewer = rendering.Viewer(WINDOW_W, WINDOW_H)
+        if self.fig is None:
+            dpi = 80
+            figsize = OBSERVATION_W / float(dpi), OBSERVATION_H / float(dpi)
+            self.fig = plt.figure(figsize=figsize)
+            self.fig.set_tight_layout({"pad": .0})
+            
+        print "STEP"
+            
+        ax = plt.Axes(self.fig, [0., 0., 1., 1.])
+        ax.xaxis.set_major_locator(ticker.NullLocator())
+        ax.yaxis.set_major_locator(ticker.NullLocator())
 
-        # target object (todo: generalize to all subclasses, not just OneStaticCircleTarget)
-        tar = rendering.make_circle(radius=self.target.radius, res=30, filled=True)
-        tar.set_color(0.8, 0.0, 0.0)
-        tar.add_attr(rendering.Transform(translation=self.target.image_coord))
-        self.viewer.add_geom(tar)
+        ax.set_frame_on(False)
+        ax.set_axis_off()
 
-        crosshairs = rendering.make_circle(radius=self.target.radius/4, res=30, filled=True)
-        crosshairs.set_color(0.0, 0.8, 0.0)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+
+
+        self.fig.add_axes(ax)
+
+        # add the background img
+        ax.imshow(self.img, interpolation='nearest')
+
+        # add target
+        target = patches.Circle(self.target.image_coord, self.target.radius, edgecolor='none', facecolor='red')
+        ax.add_patch(target)
+
+        # add aiming crosshairs
         x = self.state[0] * VIDEO_W / self.motor_limits[0]
         y = self.state[1] * VIDEO_W / self.motor_limits[1]
-        crosshairs.add_attr(rendering.Transform(translation=(x,y)))
-        self.viewer.add_onetime(crosshairs)
-            
-        return self.viewer.render(return_rgb_array = mode=='rgb_array')
+        aim = patches.Circle((x,y), self.target.radius/4, edgecolor='none', facecolor='red')
+        ax.add_patch(aim)
+        
+        # If we haven't already shown or saved the plot, then we need to
+        # draw the figure first...
+        self.fig.canvas.draw()
+
+        # Now we can save it to a numpy array.
+        data = np.fromstring(self.fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+        data = data.reshape(self.fig.canvas.get_width_height()[::-1] + (3,))
+
+        # self.fig.savefig("test.png", bbox_inches='tight', pad_inches=0)
+
+        
+        if mode == 'human':
+            plt.show(block=False, bbox_inches='tight')
+        if mode == 'rgb_array':
+            return np.array(data)
+        else:
+            pass
+
+        # target.remove()
+        # aim.remove()
+
 
 ###############################################################################
 #                             Nerfbot Environments                            #

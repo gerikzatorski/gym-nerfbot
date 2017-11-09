@@ -21,9 +21,6 @@ class Agent(object):
         self.action_space = action_space
         # could also call super(RandomAgent, self).__init__() from subclasses
 
-    # def update(self):
-        # pass
-
 ###############################################################################
 #                                   Policies                                  #
 ###############################################################################
